@@ -1,309 +1,330 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Isocube Generator</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
-            background: #000;
+import { useState, useRef, useEffect, useCallback } from "react";
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = n => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function randomPalette() {
+  const baseHue = Math.random() * 360;
+  const strat = Math.floor(Math.random() * 9);
+  const colors = [];
+  const count = 6 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < count; i++) {
+    let h, s, l;
+    switch (strat) {
+      case 0: h = (baseHue + i * 25 + Math.random() * 15) % 360; s = 55 + Math.random() * 40; l = 40 + Math.random() * 35; break;
+      case 1: h = (baseHue + (i % 3) * 120 + Math.random() * 30) % 360; s = 55 + Math.random() * 40; l = 40 + Math.random() * 35; break;
+      case 2: h = (baseHue + (i % 2) * 180 + Math.random() * 40 - 20) % 360; s = 55 + Math.random() * 40; l = 40 + Math.random() * 35; break;
+      case 3: h = (baseHue + i * 51 + Math.random() * 20) % 360; s = 60 + Math.random() * 35; l = 40 + Math.random() * 30; break;
+      case 4: h = Math.random() * 360; s = 55 + Math.random() * 40; l = 40 + Math.random() * 35; break;
+      case 5: h = [280,320,180,200,60,140,0][i%7]+Math.random()*20; s = 80+Math.random()*20; l = i<3?12+Math.random()*12:50+Math.random()*25; break;
+      case 6: h = (240+i*30+Math.random()*20)%360; s = 70+Math.random()*30; l = i%3===0?10+Math.random()*10:45+Math.random()*30; break;
+      case 7: h = [120,300,180,60,330,200,0][i%7]+Math.random()*15; s = 85+Math.random()*15; l = i<2?6+Math.random()*8:40+Math.random()*30; break;
+      default: h = [350,30,270,200,170,310,45][i%7]+Math.random()*20; s = 75+Math.random()*25; l = i<2?8+Math.random()*10:45+Math.random()*25; break;
+    }
+    colors.push(hslToHex(h % 360, s, l));
+  }
+  return colors;
+}
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function shade(hex, factor) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  const c = v => Math.max(0, Math.min(255, Math.round(v * factor)));
+  return `rgb(${c(r)},${c(g)},${c(b)})`;
+}
+
+function drawCubes(ctx, w, h, colors, edgeLen) {
+  ctx.fillStyle = shade(colors[0], 0.3);
+  ctx.fillRect(0, 0, w, h);
+  const sqrt3 = Math.sqrt(3);
+  const hx = edgeLen * sqrt3 / 2;
+  const colW = edgeLen * sqrt3;
+  const rowH = edgeLen * 1.5;
+  const p = 0.5;
+  const cols = Math.ceil(w / colW) + 3;
+  const rows = Math.ceil(h / rowH) + 3;
+  for (let row = -2; row < rows; row++) {
+    for (let col = -2; col < cols; col++) {
+      const offsetX = row % 2 === 0 ? 0 : hx;
+      const cx = col * colW + offsetX;
+      const cy = row * rowH;
+      const tc = pick(colors), lc = pick(colors), rc = pick(colors);
+      ctx.beginPath(); ctx.moveTo(cx, cy-edgeLen-p); ctx.lineTo(cx+hx+p, cy-edgeLen/2); ctx.lineTo(cx, cy+p); ctx.lineTo(cx-hx-p, cy-edgeLen/2); ctx.closePath(); ctx.fillStyle = tc; ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cx-hx-p, cy-edgeLen/2-p); ctx.lineTo(cx+p, cy); ctx.lineTo(cx+p, cy+edgeLen+p); ctx.lineTo(cx-hx-p, cy+edgeLen/2+p); ctx.closePath(); ctx.fillStyle = shade(lc, 0.92); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(cx+hx+p, cy-edgeLen/2-p); ctx.lineTo(cx-p, cy); ctx.lineTo(cx-p, cy+edgeLen+p); ctx.lineTo(cx+hx+p, cy+edgeLen/2+p); ctx.closePath(); ctx.fillStyle = shade(rc, 0.85); ctx.fill();
+    }
+  }
+}
+
+// SVG icons
+const PaletteIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="13.5" cy="6.5" r="0.5" fill="currentColor"/><circle cx="17.5" cy="10.5" r="0.5" fill="currentColor"/>
+    <circle cx="8.5" cy="7.5" r="0.5" fill="currentColor"/><circle cx="6.5" cy="12.5" r="0.5" fill="currentColor"/>
+    <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/>
+  </svg>
+);
+
+const DownloadIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+);
+
+const RefreshIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.5 2v6h-6"/><path d="M2.5 22v-6h6"/>
+    <path d="M2.5 11.5a10 10 0 0 1 18.8-4.3L21.5 8"/><path d="M21.5 12.5a10 10 0 0 1-18.8 4.2L2.5 16"/>
+  </svg>
+);
+
+const glass = {
+  background: "rgba(0,0,0,0.35)",
+  backdropFilter: "blur(16px)",
+  WebkitBackdropFilter: "blur(16px)",
+  border: "1px solid rgba(255,255,255,0.08)",
+};
+
+const glassDark = glass;
+
+export default function App() {
+  const canvasRef = useRef(null);
+  const stateRef = useRef({ colors: randomPalette(), cubeSize: 60 + Math.floor(Math.random() * 91) });
+  const [, setTick] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [showHint, setShowHint] = useState(true);
+  const [hovered, setHovered] = useState(null);
+  const [showPalette, setShowPalette] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 600);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const render = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    const scale = Math.min(w, h) / 3840;
+    const { colors, cubeSize } = stateRef.current;
+    drawCubes(ctx, w, h, colors, cubeSize * (w < 600 ? w / 1290 : w / 3840));
+  }, []);
+
+  const regenerate = useCallback(() => {
+    stateRef.current = { colors: randomPalette(), cubeSize: 60 + Math.floor(Math.random() * 91) };
+    setTick(t => t + 1);
+    setShowPalette(false);
+    render();
+  }, [render]);
+
+  const doSave = useCallback(() => {
+    setSaving(true);
+    const { colors, cubeSize } = stateRef.current;
+    setTimeout(() => {
+      const c = document.createElement("canvas");
+      c.width = 3840; c.height = 2160;
+      drawCubes(c.getContext("2d"), 3840, 2160, colors, cubeSize);
+      c.toBlob(blob => {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `isocube-4k-${Date.now()}.png`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+        setSaving(false);
+      }, "image/png");
+    }, 50);
+  }, []);
+
+  useEffect(() => { render(); }, [render]);
+
+  useEffect(() => {
+    const onResize = () => render();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [render]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.code === "Space") { e.preventDefault(); regenerate(); setShowHint(false); }
+      if (e.code === "KeyS") { e.preventDefault(); doSave(); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [regenerate, doSave]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setShowHint(false), 3500);
+    return () => clearTimeout(t);
+  }, []);
+
+  const { colors } = stateRef.current;
+
+  const btnStyle = (active) => ({
+    width: 56, height: 56, borderRadius: "50%",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    cursor: "pointer", border: active ? "1px solid rgba(255,255,255,0.25)" : "1px solid rgba(255,255,255,0.08)",
+    background: active ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.06)",
+    color: active ? "#fff" : "rgba(255,255,255,0.7)",
+    transition: "all 0.2s",
+    boxShadow: "none",
+  });
+
+  return (
+    <div style={{ position: "fixed", inset: 0, overflow: "hidden", cursor: "pointer", touchAction: "manipulation" }}
+      onClick={(e) => {
+        if (e.target === canvasRef.current || e.target === canvasRef.current?.parentElement) {
+          regenerate(); setShowHint(false);
         }
-        @keyframes fadeOut {
-            0%, 50% { opacity: 1; }
-            100% { opacity: 0; }
-        }
-        .animate-fade-out {
-            animation: fadeOut 3.5s forwards;
-        }
-        .glass {
-            background: rgba(0, 0, 0, 0.35);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-    </style>
-</head>
-<body>
-    <div id="root"></div>
+      }}>
+      <canvas ref={canvasRef} style={{ position: "absolute", inset: 0 }} />
 
-    <script type="text/babel">
-        const { useState, useRef, useEffect, useCallback } = React;
+      {/* === MOBILE: floating pill menu === */}
+      {isMobile && (
+        <>
+          <div style={{
+            position: "absolute", bottom: 32, left: "50%", transform: "translateX(-50%)",
+            display: "flex", alignItems: "center", gap: 12,
+            padding: "8px 12px", borderRadius: 40,
+            ...glass,
+            pointerEvents: "auto", zIndex: 10,
+          }}
+            onClick={e => e.stopPropagation()}>
+            {/* palette toggle */}
+            <button style={btnStyle(showPalette)}
+              onClick={() => setShowPalette(p => !p)}>
+              <PaletteIcon />
+            </button>
+            {/* download */}
+            <button style={btnStyle(false)} onClick={doSave}>
+              {saving
+                ? <div style={{ width: 20, height: 20, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                : <DownloadIcon />}
+            </button>
+            {/* regenerate */}
+            <button style={btnStyle(false)} onClick={regenerate}>
+              <RefreshIcon />
+            </button>
+          </div>
 
-        function hslToHex(h, s, l) {
-            s /= 100; l /= 100;
-            const a = s * Math.min(l, 1 - l);
-            const f = n => {
-                const k = (n + h / 30) % 12;
-                const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
-                return Math.round(255 * color).toString(16).padStart(2, "0");
-            };
-            return `#${f(0)}${f(8)}${f(4)}`;
-        }
-
-        function randomPalette() {
-            const baseHue = Math.random() * 360;
-            const strat = Math.floor(Math.random() * 9);
-            const colors = [];
-            const count = 6 + Math.floor(Math.random() * 5);
-
-            for (let i = 0; i < count; i++) {
-                let h, s, l;
-                switch (strat) {
-                    case 0: // analogous
-                        h = (baseHue + i * 25 + Math.random() * 15) % 360;
-                        s = 55 + Math.random() * 40; l = 40 + Math.random() * 35;
-                        break;
-                    case 1: // triadic
-                        h = (baseHue + (i % 3) * 120 + Math.random() * 30) % 360;
-                        s = 55 + Math.random() * 40; l = 40 + Math.random() * 35;
-                        break;
-                    case 2: // complementary
-                        h = (baseHue + (i % 2) * 180 + Math.random() * 40 - 20) % 360;
-                        s = 55 + Math.random() * 40; l = 40 + Math.random() * 35;
-                        break;
-                    case 3: // rainbow
-                        h = (baseHue + i * 51 + Math.random() * 20) % 360;
-                        s = 60 + Math.random() * 35; l = 40 + Math.random() * 30;
-                        break;
-                    case 4: // full random vivid
-                        h = Math.random() * 360;
-                        s = 55 + Math.random() * 40; l = 40 + Math.random() * 35;
-                        break;
-                    case 5: // cyberpunk neon
-                        h = [280, 320, 180, 200, 60, 140, 0][i % 7] + Math.random() * 20;
-                        s = 80 + Math.random() * 20;
-                        l = i < 3 ? 12 + Math.random() * 12 : 50 + Math.random() * 25;
-                        break;
-                    case 6: // midnight neon
-                        h = (240 + i * 30 + Math.random() * 20) % 360;
-                        s = 70 + Math.random() * 30;
-                        l = i % 3 === 0 ? 10 + Math.random() * 10 : 45 + Math.random() * 30;
-                        break;
-                    case 7: // toxic neon
-                        h = [120, 300, 180, 60, 330, 200, 0][i % 7] + Math.random() * 15;
-                        s = 85 + Math.random() * 15;
-                        l = i < 2 ? 6 + Math.random() * 8 : 40 + Math.random() * 30;
-                        break;
-                    default: // synth noir
-                        h = [350, 30, 270, 200, 170, 310, 45][i % 7] + Math.random() * 20;
-                        s = 75 + Math.random() * 25;
-                        l = i < 2 ? 8 + Math.random() * 10 : 45 + Math.random() * 25;
-                        break;
-                }
-                colors.push(hslToHex(h % 360, s, l));
-            }
-            return colors;
-        }
-
-        function pick(colors) {
-            return colors[Math.floor(Math.random() * colors.length)];
-        }
-
-        function shade(hex, factor) {
-            const r = parseInt(hex.slice(1, 3), 16);
-            const g = parseInt(hex.slice(3, 5), 16);
-            const b = parseInt(hex.slice(5, 7), 16);
-            const c = v => Math.max(0, Math.min(255, Math.round(v * factor)));
-            return `rgb(${c(r)},${c(g)},${c(b)})`;
-        }
-
-        function drawCubes(ctx, w, h, colors, edgeLen) {
-            ctx.fillStyle = shade(colors[0], 0.3);
-            ctx.fillRect(0, 0, w, h);
-
-            const sqrt3 = Math.sqrt(3);
-            const hx = edgeLen * sqrt3 / 2;
-            const colW = edgeLen * sqrt3;
-            const rowH = edgeLen * 1.5;
-            const p = 0.5;
-
-            const cols = Math.ceil(w / colW) + 3;
-            const rows = Math.ceil(h / rowH) + 3;
-
-            for (let row = -2; row < rows; row++) {
-                for (let col = -2; col < cols; col++) {
-                    const offsetX = (row % 2 === 0) ? 0 : hx;
-                    const cx = col * colW + offsetX;
-                    const cy = row * rowH;
-
-                    const topColor = pick(colors);
-                    const leftColor = pick(colors);
-                    const rightColor = pick(colors);
-
-                    // top face
-                    ctx.beginPath();
-                    ctx.moveTo(cx, cy - edgeLen - p);
-                    ctx.lineTo(cx + hx + p, cy - edgeLen / 2);
-                    ctx.lineTo(cx, cy + p);
-                    ctx.lineTo(cx - hx - p, cy - edgeLen / 2);
-                    ctx.closePath();
-                    ctx.fillStyle = topColor;
-                    ctx.fill();
-
-                    // left face
-                    ctx.beginPath();
-                    ctx.moveTo(cx - hx - p, cy - edgeLen / 2 - p);
-                    ctx.lineTo(cx + p, cy);
-                    ctx.lineTo(cx + p, cy + edgeLen + p);
-                    ctx.lineTo(cx - hx - p, cy + edgeLen / 2 + p);
-                    ctx.closePath();
-                    ctx.fillStyle = shade(leftColor, 0.92);
-                    ctx.fill();
-
-                    // right face
-                    ctx.beginPath();
-                    ctx.moveTo(cx + hx + p, cy - edgeLen / 2 - p);
-                    ctx.lineTo(cx - p, cy);
-                    ctx.lineTo(cx - p, cy + edgeLen + p);
-                    ctx.lineTo(cx + hx + p, cy + edgeLen / 2 + p);
-                    ctx.closePath();
-                    ctx.fillStyle = shade(rightColor, 0.85);
-                    ctx.fill();
-                }
-            }
-        }
-
-        function App() {
-            const canvasRef = useRef(null);
-            const stateRef = useRef({ colors: randomPalette(), cubeSize: 60 + Math.floor(Math.random() * 91) });
-            const [, setTick] = useState(0);
-            const [saving, setSaving] = useState(false);
-            const [showHint, setShowHint] = useState(true);
-            const [hovered, setHovered] = useState(null);
-
-            const render = useCallback(() => {
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-                const dpr = window.devicePixelRatio || 1;
-                const w = window.innerWidth;
-                const h = window.innerHeight;
-                canvas.width = w * dpr;
-                canvas.height = h * dpr;
-                canvas.style.width = w + "px";
-                canvas.style.height = h + "px";
-                const ctx = canvas.getContext("2d");
-                ctx.scale(dpr, dpr);
-                const scale = w / 3840;
-                const { colors, cubeSize } = stateRef.current;
-                drawCubes(ctx, w, h, colors, cubeSize * (scale || 1));
-            }, []);
-
-            const regenerate = useCallback(() => {
-                stateRef.current = {
-                    colors: randomPalette(),
-                    cubeSize: 60 + Math.floor(Math.random() * 91),
-                };
-                setTick(t => t + 1);
-                render();
-            }, [render]);
-
-            useEffect(() => {
-                render();
-                const onResize = () => render();
-                window.addEventListener("resize", onResize);
-                return () => window.removeEventListener("resize", onResize);
-            }, [render]);
-
-            useEffect(() => {
-                const onKey = (e) => {
-                    if (e.code === "Space") {
-                        e.preventDefault();
-                        regenerate();
-                        setShowHint(false);
-                    }
-                    if (e.code === "KeyS") {
-                        e.preventDefault();
-                        setSaving(true);
-                        const { colors, cubeSize } = stateRef.current;
-                        setTimeout(() => {
-                            const c = document.createElement("canvas");
-                            c.width = 3840; c.height = 2160;
-                            drawCubes(c.getContext("2d"), 3840, 2160, colors, cubeSize);
-                            c.toBlob(blob => {
-                                const a = document.createElement("a");
-                                a.href = URL.createObjectURL(blob);
-                                a.download = `isocube-4k-${Date.now()}.png`;
-                                a.click();
-                                URL.revokeObjectURL(a.href);
-                                setSaving(false);
-                            }, "image/png");
-                        }, 50);
-                    }
-                };
-                window.addEventListener("keydown", onKey);
-                return () => window.removeEventListener("keydown", onKey);
-            }, [regenerate]);
-
-            useEffect(() => {
-                const t = setTimeout(() => setShowHint(false), 3500);
-                return () => clearTimeout(t);
-            }, []);
-
-            const copyToClipboard = (text) => {
-                const textArea = document.createElement("textarea");
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-            };
-
-            const { colors } = stateRef.current;
-
-            return (
-                <div 
-                    className="fixed inset-0 overflow-hidden cursor-pointer"
-                    onClick={() => { regenerate(); setShowHint(false); }}
-                >
-                    <canvas ref={canvasRef} className="absolute inset-0" />
-
-                    <div className="absolute bottom-0 left-0 right-0 flex justify-between items-end p-4 pointer-events-none">
-                        <div className="flex gap-1 p-2 rounded-lg glass pointer-events-auto">
-                            {colors.map((c, i) => (
-                                <div key={i} className="relative group"
-                                    onMouseEnter={() => setHovered(i)}
-                                    onMouseLeave={() => setHovered(null)}
-                                    onClick={e => { e.stopPropagation(); copyToClipboard(c); }}>
-                                    <div 
-                                        style={{ background: c }}
-                                        className="w-4 h-4 rounded-sm border border-white/10 cursor-copy transition-transform hover:scale-110" 
-                                    />
-                                    {hovered === i && (
-                                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md px-2 py-1 rounded text-[10px] font-mono text-white whitespace-nowrap pointer-events-none border border-white/10">
-                                            {c}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                        
-                        <div className="font-mono text-[10px] text-white/50 glass px-4 py-2 rounded-lg flex items-center gap-4">
-                            <span><span className="text-white/80">SPACE</span>/CLICK → NEW</span>
-                            <span><span className="text-white/80">S</span> → SAVE 4K</span>
-                            {saving && <span className="text-white animate-pulse">SAVING...</span>}
-                        </div>
-                    </div>
-
-                    {showHint && (
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-sm text-white/60 glass px-6 py-3 rounded-lg animate-fade-out pointer-events-none">
-                            PRESS SPACE OR CLICK ANYWHERE
-                        </div>
-                    )}
+          {/* palette popup */}
+          {showPalette && (
+            <div style={{
+              position: "absolute", bottom: 108, left: "50%", transform: "translateX(-50%)",
+              display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center",
+              padding: "12px 16px", borderRadius: 14,
+              ...glassDark,
+              pointerEvents: "auto", zIndex: 10,
+              maxWidth: "80vw",
+            }}
+              onClick={e => e.stopPropagation()}>
+              {colors.map((c, i) => (
+                <div key={i} style={{ textAlign: "center" }}
+                  onClick={() => navigator.clipboard?.writeText(c)}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 6,
+                    background: c, border: "2px solid rgba(255,255,255,0.2)",
+                    cursor: "pointer",
+                  }} />
+                  <div style={{
+                    fontFamily: "monospace", fontSize: 8,
+                    color: "rgba(255,255,255,0.5)", marginTop: 3,
+                  }}>{c}</div>
                 </div>
-            );
-        }
+              ))}
+            </div>
+          )}
+        </>
+      )}
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
-</body>
-</html>
+      {/* === DESKTOP: bottom bar === */}
+      {!isMobile && (
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0,
+          display: "flex", justifyContent: "space-between", alignItems: "end",
+          padding: "16px 18px",
+          pointerEvents: "none",
+        }}>
+          <div style={{
+            display: "flex", gap: 4, pointerEvents: "auto", position: "relative",
+            padding: "8px 12px", borderRadius: 10,
+            ...glassDark,
+          }}>
+            {colors.map((c, i) => (
+              <div key={i} style={{ position: "relative" }}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered(null)}
+                onClick={e => { e.stopPropagation(); navigator.clipboard?.writeText(c); }}>
+                <div style={{
+                  width: 18, height: 18, borderRadius: 4,
+                  background: c, border: "1px solid rgba(255,255,255,0.15)",
+                  cursor: "default",
+                }} />
+                {hovered === i && (
+                  <div style={{
+                    position: "absolute", bottom: 28, left: "50%",
+                    transform: "translateX(-50%)",
+                    ...glassDark,
+                    padding: "4px 8px", borderRadius: 4, whiteSpace: "nowrap",
+                    fontFamily: "monospace", fontSize: 11, color: "#fff",
+                    pointerEvents: "none",
+                  }}>{c}</div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{
+            fontFamily: "monospace",
+            fontSize: 11, color: "rgba(255,255,255,0.5)",
+            padding: "8px 14px", borderRadius: 10,
+            pointerEvents: "auto",
+            ...glassDark,
+          }}>
+            <span style={{ color: "rgba(255,255,255,0.7)" }}>SPACE</span>/click → new &nbsp;
+            <span style={{ color: "rgba(255,255,255,0.7)" }}>S</span> → save 4K
+            {saving && <span style={{ color: "#fff", marginLeft: 10 }}>saving...</span>}
+          </div>
+        </div>
+      )}
+
+      {/* hint */}
+      {showHint && (
+        <div style={{
+          position: "absolute", top: "50%", left: "50%",
+          transform: "translate(-50%, -50%)",
+          fontFamily: "monospace", fontSize: isMobile ? 12 : 13,
+          color: "rgba(255,255,255,0.65)",
+          padding: "12px 22px", borderRadius: 8,
+          ...glassDark,
+          animation: "fo 3.5s forwards", pointerEvents: "none",
+        }}>
+          {isMobile ? "tap anywhere or use controls below" : "press space or click anywhere"}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fo{0%,50%{opacity:1}100%{opacity:0}}
+        @keyframes spin{to{transform:rotate(360deg)}}
+      `}</style>
+    </div>
+  );
+}
